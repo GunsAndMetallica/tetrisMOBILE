@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tetris Mobile</title>
+<style>
+  body {
+    background: #111;
+    color: #fff;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+  }
+  h1 {
+    margin: 10px 0;
+    font-size: 1.5rem;
+  }
+  canvas {
+    background: #222;
+    border: 2px solid #fff;
+    width: 90vw;
+    height: 70vh;
+    max-width: 400px;
+    max-height: 600px;
+  }
+  #controls {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  button {
+    background: #333;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    padding: 10px 20px;
+    width: 80px;
+    transition: 0.2s;
+  }
+  button:active {
+    background: #555;
+    transform: scale(0.95);
+  }
+</style>
+</head>
+<body>
+  <h1>🎮 Tetris</h1>
+  <canvas id="tetris" width="240" height="400"></canvas>
+  <div id="controls">
+    <button id="left">←</button>
+    <button id="rotate">⟳</button>
+    <button id="right">→</button>
+    <button id="down">↓</button>
+  </div>
+
+<script>
+// === BASIC TETRIS ===
+const canvas = document.getElementById('tetris');
+const context = canvas.getContext('2d');
+context.scale(20, 20);
+
+function arenaSweep() {
+  outer: for (let y = arena.length - 1; y > 0; --y) {
+    for (let x = 0; x < arena[y].length; ++x) {
+      if (arena[y][x] === 0) continue;
+    }
+    const row = arena.splice(y, 1)[0].fill(0);
+    arena.unshift(row);
+    ++y;
+    player.score += 10;
+  }
+}
+
+function collide(arena, player) {
+  const [m, o] = [player.matrix, player.pos];
+  for (let y = 0; y < m.length; ++y) {
+    for (let x = 0; x < m[y].length; ++x) {
+      if (m[y][x] !== 0 &&
+          (arena[y + o.y] &&
+           arena[y + o.y][x + o.x]) !== 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function createMatrix(w, h) {
+  const matrix = [];
+  while (h--) matrix.push(new Array(w).fill(0));
+  return matrix;
+}
+
+function createPiece(type) {
+  switch (type) {
+    case 'T': return [[0,1,0],[1,1,1],[0,0,0]];
+    case 'O': return [[1,1],[1,1]];
+    case 'L': return [[0,1],[0,1],[0,1,1]];
+    case 'J': return [[1,0],[1,0],[1,1]];
+    case 'I': return [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]];
+    case 'S': return [[0,1,1],[1,1,0],[0,0,0]];
+    case 'Z': return [[1,1,0],[0,1,1],[0,0,0]];
+  }
+}
+
+function drawMatrix(matrix, offset) {
+  matrix.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (value !== 0) {
+        context.fillStyle = colors[value];
+        context.fillRect(x + offset.x, y + offset.y, 1, 1);
+      }
+    });
+  });
+}
+
+function draw() {
+  context.fillStyle = '#000';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  drawMatrix(arena, {x: 0, y: 0});
+  drawMatrix(player.matrix, player.pos);
+}
+
+function merge(arena, player) {
+  player.matrix.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (value !== 0) {
+        arena[y + player.pos.y][x + player.pos.x] = value;
+      }
+    });
+  });
+}
+
+function playerDrop() {
+  player.pos.y++;
+  if (collide(arena, player)) {
+    player.pos.y--;
+    merge(arena, player);
+    playerReset();
+    arenaSweep();
+  }
+  dropCounter = 0;
+}
+
+function playerMove(dir) {
+  player.pos.x += dir;
+  if (collide(arena, player)) {
+    player.pos.x -= dir;
+  }
+}
+
+function playerReset() {
+  const pieces = 'ILJOTSZ';
+  player.matrix = createPiece(pieces[pieces.length * Math.random() | 0]);
+  player.pos.y = 0;
+  player.pos.x = (arena[0].length / 2 | 0) -
+                 (player.matrix[0].length / 2 | 0);
+  if (collide(arena, player)) {
+    arena.forEach(row => row.fill(0));
+    player.score = 0;
+  }
+}
+
+function playerRotate() {
+  const m = player.matrix;
+  for (let y = 0; y < m.length; ++y) {
+    for (let x = 0; x < y; ++x) {
+      [m[x][y], m[y][x]] = [m[y][x], m[x][y]];
+    }
+  }
+  m.forEach(row => row.reverse());
+  if (collide(arena, player)) player.pos.x++;
+}
+
+let dropCounter = 0;
+let dropInterval = 1000;
+let lastTime = 0;
+
+function update(time = 0) {
+  const delta = time - lastTime;
+  lastTime = time;
+  dropCounter += delta;
+  if (dropCounter > dropInterval) playerDrop();
+  draw();
+  requestAnimationFrame(update);
+}
+
+const colors = [null, '#FF0D72', '#0DC2FF', '#0DFF72',
+                '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'];
+
+const arena = createMatrix(12, 20);
+const player = { pos: {x: 0, y: 0}, matrix: null, score: 0 };
+playerReset();
+update();
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') playerMove(-1);
+  if (e.key === 'ArrowRight') playerMove(1);
+  if (e.key === 'ArrowDown') playerDrop();
+  if (e.key === 'ArrowUp' || e.key === ' ') playerRotate();
+});
+
+// Touch Controls
+document.getElementById('left').addEventListener('click', () => playerMove(-1));
+document.getElementById('right').addEventListener('click', () => playerMove(1));
+document.getElementById('down').addEventListener('click', () => playerDrop());
+document.getElementById('rotate').addEventListener('click', () => playerRotate());
+</script>
+</body>
+</html>
